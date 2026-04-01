@@ -56,14 +56,14 @@ app = FastAPI(
 
 # Configuration du CORS pour permettre au Frontend (Localhost ou Vercel) de communiquer avec l'API
 # Dans backend/main.py
-origins = [
-    "http://localhost:5500",
-    "https://agent-frontend-chi.vercel.app",  # L'URL de votre capture
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "agent-frontend-chi.vercel.app",
+        "https://*.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
