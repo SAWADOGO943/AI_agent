@@ -5,7 +5,7 @@ const sendBtn      = document.getElementById('sendBtn');
 const loader       = document.getElementById('loader');
 
 // URL du backend — à modifier si tu changes de port ou déploies
-const API_URL = "https://ai-agent-13vc.onrender.com";
+const API_URL = "https://ai-agent-13vc.onrender.com/chat";
 
 
 
