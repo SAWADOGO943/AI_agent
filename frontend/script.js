@@ -5,7 +5,7 @@ const sendBtn      = document.getElementById('sendBtn');
 const loader       = document.getElementById('loader');
 
 // URL du backend — à modifier si tu changes de port ou déploies
-const API_URL = 'http://localhost:8000/chat';
+const API_URL = "https://AI-agent-backend.onrender.com/chat";
 
 
 // ── FONCTION : Afficher une bulle de message ────────────────────
