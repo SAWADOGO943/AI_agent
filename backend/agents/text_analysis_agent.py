@@ -1,92 +1,120 @@
-from typing import List
-from schemas.agent_schema import AgentStep, AgentResponse
-from services.gemini_service import call_gemini
+from typing import List  # Import du type List pour le typage statique des listes.
+from schemas.agent_schema import (
+    AgentStep,
+    AgentResponse,
+)  # Import des classes de structuration des données.
+from services.gemini_service import (
+    call_gemini,
+)  # Import de la fonction d'interface avec l'IA Gemini.
 
 
-class TextAnalysisAgent:
-    """Agent d'analyse de texte qui planifie, exécute et observe son travail."""
+class TextAnalysisAgent:  # Définition de la classe principale de l'agent d'analyse.
+    """Agent d'analyse de texte qui planifie, exécute et observe son travail."""  # Documentation de la classe.
 
-    def __init__(self):
-        self.tools = {
-            "analyser_sentiment": self._analyser_sentiment,
-            "extraire_themes": self._extraire_themes,
-            "evaluer_complexite": self._evaluer_complexite,
-        }
+    def __init__(self):  # Constructeur de la classe.
+        self.tools = {  # Dictionnaire associant des noms d'outils à leurs méthodes respectives.
+            "analyser_sentiment": self._analyser_sentiment,  # Enregistre l'outil d'analyse de sentiment.
+            "extraire_themes": self._extraire_themes,  # Enregistre l'outil d'extraction de thèmes.
+            "evaluer_complexite": self._evaluer_complexite,  # Enregistre l'outil d'évaluation de complexité.
+        }  # Fin du dictionnaire d'outils.
 
-    async def run(
-        self, text: str, task: str = "Analyse complète de ce texte"
-    ) -> AgentResponse:
-        """Exécute l'agent sur le texte donné."""
+    async def run(  # Méthode asynchrone principale pour lancer l'analyse.
+        self,
+        text: str,
+        task: str = "Analyse complète de ce texte",  # Paramètres : texte à analyser et intitulé de la tâche.
+    ) -> AgentResponse:  # Type de retour : objet structuré AgentResponse.
+        """Exécute l'agent sur le texte donné."""  # Documentation de la méthode.
         # Planification
-        plan = [
-            "Analyser le sentiment du texte",
-            "Extraire les thèmes principaux",
-            "Évaluer la complexité du texte",
-            "Synthétiser les résultats",
-        ]
+        plan = [  # Liste descriptive des étapes théoriques à suivre.
+            "Analyser le sentiment du texte",  # Étape 1 définie.
+            "Extraire les thèmes principaux",  # Étape 2 définie.
+            "Évaluer la complexité du texte",  # Étape 3 définie.
+            "Synthétiser les résultats",  # Étape 4 définie.
+        ]  # Fin de la liste du plan.
 
-        steps: List[AgentStep] = []
-        step_number = 1
+        steps: List[
+            AgentStep
+        ] = []  # Initialisation de la liste pour stocker l'historique réel des étapes.
+        step_number = 1  # Initialisation du compteur d'ordre des étapes.
 
         # Exécution des étapes
-        for tool_name, tool_func in self.tools.items():
-            try:
-                result = await tool_func(text)
-                observation = (
-                    f"Résultat de {tool_name}: {result[:200]}..."  # Limiter la longueur
-                )
-                steps.append(
-                    AgentStep(
-                        step_number=step_number,
-                        step_name=tool_name.replace("_", " ").capitalize(),
-                        tool_used=tool_name,
-                        result=result,
-                        observation=observation,
-                    )
-                )
-                step_number += 1
-            except Exception as e:
-                steps.append(
-                    AgentStep(
-                        step_number=step_number,
-                        step_name=f"Erreur dans {tool_name}",
-                        tool_used=tool_name,
-                        result="",
-                        observation=f"Erreur: {str(e)}",
-                    )
-                )
-                step_number += 1
+        for (
+            tool_name,
+            tool_func,
+        ) in self.tools.items():  # Boucle sur chaque outil configuré dans __init__.
+            try:  # Bloc de gestion d'erreur pour sécuriser l'exécution de l'IA.
+                result = await tool_func(text)  # Appel asynchrone de l'outil LLM.
+                observation = (  # Création d'un résumé court pour le contexte de synthèse.
+                    f"Résultat de {tool_name}: {result[:200]}..."  # Tronquage à 200 caractères pour la lisibilité.
+                )  # Fin de l'observation.
+                steps.append(  # Ajout d'un objet AgentStep à l'historique.
+                    AgentStep(  # Instanciation de l'étape avec ses métadonnées.
+                        step_number=step_number,  # Position dans la séquence.
+                        step_name=tool_name.replace(
+                            "_", " "
+                        ).capitalize(),  # Nom formaté pour l'utilisateur.
+                        tool_used=tool_name,  # Nom technique de l'outil.
+                        result=result,  # Réponse complète de l'IA.
+                        observation=observation,  # Résumé de l'action.
+                    )  # Fin de l'objet AgentStep.
+                )  # Fin de l'ajout.
+                step_number += 1  # Incrémentation du compteur.
+            except Exception as e:  # Capture de toute erreur durant l'appel.
+                steps.append(  # Enregistrement de l'échec dans l'historique des étapes.
+                    AgentStep(  # Création d'une étape d'erreur.
+                        step_number=step_number,  # Position actuelle.
+                        step_name=f"Erreur dans {tool_name}",  # Libellé explicite de l'erreur.
+                        tool_used=tool_name,  # Outil concerné par l'échec.
+                        result="",  # Aucun résultat produit.
+                        observation=f"Erreur: {str(e)}",  # Description de l'exception capturée.
+                    )  # Fin de l'objet d'erreur.
+                )  # Fin de l'ajout.
+                step_number += 1  # Incrémentation du compteur.
 
         # Synthèse finale
-        final_answer = await self._synthetiser_resultats(steps, task)
+        final_answer = await self._synthetiser_resultats(
+            steps, task
+        )  # Appel final pour agréger tous les résultats.
 
-        return AgentResponse(
-            task=task,
-            plan=plan,
-            steps=steps,
-            final_answer=final_answer,
-            total_steps=len(steps),
-        )
+        return AgentResponse(  # Retour de l'objet de réponse final structuré.
+            task=task,  # Rappel de la tâche demandée.
+            plan=plan,  # Liste des intentions initiales.
+            steps=steps,  # Liste des exécutions réelles.
+            final_answer=final_answer,  # Conclusion générée par la synthèse.
+            total_steps=len(steps),  # Nombre total d'étapes traitées.
+        )  # Fin du constructeur AgentResponse.
 
-    async def _analyser_sentiment(self, text: str) -> str:
-        """Analyse le sentiment du texte."""
-        prompt = f"Analyse le sentiment de ce texte (positif, négatif, neutre) et explique brièvement: {text[:1000]}"
-        return await call_gemini(prompt)
+    async def _analyser_sentiment(
+        self, text: str
+    ) -> str:  # Méthode privée d'analyse de sentiment.
+        """Analyse le sentiment du texte."""  # Documentation.
+        prompt = f"Analyse le sentiment de ce texte (positif, négatif, neutre) et explique brièvement: {text[:1000]}"  # Préparation de l'instruction LLM (limite 1000 chars).
+        return await call_gemini(prompt)  # Appel à l'API Gemini.
 
-    async def _extraire_themes(self, text: str) -> str:
-        """Extrait les thèmes principaux."""
-        prompt = f"Extrait les thèmes principaux de ce texte sous forme de liste: {text[:1000]}"
-        return await call_gemini(prompt)
+    async def _extraire_themes(
+        self, text: str
+    ) -> str:  # Méthode privée d'extraction thématique.
+        """Extrait les thèmes principaux."""  # Documentation.
+        prompt = f"Extrait les thèmes principaux de ce texte sous forme de liste: {text[:1000]}"  # Préparation de l'instruction LLM.
+        return await call_gemini(prompt)  # Appel à l'API Gemini.
 
-    async def _evaluer_complexite(self, text: str) -> str:
-        """Évalue la complexité du texte."""
-        prompt = f"Évalue la complexité linguistique de ce texte (simple, moyenne, complexe) et justifie: {text[:1000]}"
-        return await call_gemini(prompt)
+    async def _evaluer_complexite(
+        self, text: str
+    ) -> str:  # Méthode privée d'évaluation de complexité.
+        """Évalue la complexité du texte."""  # Documentation.
+        prompt = f"Évalue la complexité linguistique de ce texte (simple, moyenne, complexe) et justifie: {text[:1000]}"  # Préparation de l'instruction LLM.
+        return await call_gemini(prompt)  # Appel à l'API Gemini.
 
-    async def _synthetiser_resultats(self, steps: List[AgentStep], task: str) -> str:
-        """Synthétise les résultats des étapes."""
-        results_summary = "\n".join(
-            [f"- {step.step_name}: {step.observation}" for step in steps]
-        )
-        prompt = f"Basé sur ces analyses:\n{results_summary}\n\nSynthétise une réponse complète pour la tâche: {task}"
-        return await call_gemini(prompt)
+    async def _synthetiser_resultats(
+        self, steps: List[AgentStep], task: str
+    ) -> str:  # Méthode privée de synthèse globale.
+        """Synthétise les résultats des étapes."""  # Documentation.
+        results_summary = "\n".join(  # Concaténation des observations de chaque étape réussie ou échouée.
+            [
+                f"- {step.step_name}: {step.observation}" for step in steps
+            ]  # Formatage en liste à puces.
+        )  # Fin de la jointure.
+        prompt = f"Basé sur ces analyses:\n{results_summary}\n\nSynthétise une réponse complète pour la tâche: {task}"  # Prompt de synthèse finale.
+        return await call_gemini(
+            prompt
+        )  # Appel final à l'API Gemini pour la réponse utilisateur.

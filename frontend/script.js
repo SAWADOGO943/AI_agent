@@ -1,3 +1,6 @@
+// Configuration API - Remplacer par l'URL de votre backend Render
+const API_BASE = 'https://ai-agent-13vc.onrender.com'; // À remplacer par votre URL Render
+
 // Fonction utilitaire pour afficher le chargement
 function showLoading(element, message = 'Chargement...') {
     element.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
