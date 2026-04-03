@@ -1,9 +1,13 @@
 from pydantic import BaseModel
 
-# Ce que le frontend DOIT envoyer
-class ChatRequest(BaseModel):
-    message: str  # Obligatoire, doit être une chaîne de caractères
 
-# Ce que le backend VA retourner
+class ChatRequest(BaseModel):
+    """Requête pour le chat simple."""
+
+    message: str
+
+
 class ChatResponse(BaseModel):
-    reply: str  # La réponse générée par Gemini
+    """Réponse du chat."""
+
+    reply: str

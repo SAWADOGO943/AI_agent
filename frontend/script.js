@@ -1,125 +1,99 @@
-// ── SÉLECTION DES ÉLÉMENTS DU DOM ──────────────────────────────
-const chatMessages = document.getElementById('chatMessages');
-const userInput    = document.getElementById('userInput');
-const sendBtn      = document.getElementById('sendBtn');
-const loader       = document.getElementById('loader');
-
-// URL du backend — à modifier si tu changes de port ou déploies
-const API_URL = "https://ai-agent-13vc.onrender.com/chat";
-
-
-
-
-// ── FONCTION : Afficher une bulle de message ────────────────────
-function appendMessage(text, sender) {
-    // sender = 'user' ou 'bot'
-
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', `${sender}-message`);
-
-    const bubble = document.createElement('div');
-    bubble.classList.add('message-bubble');
-
-    // textContent (pas innerHTML) → protège contre les injections XSS
-    bubble.textContent = text;
-
-    messageDiv.appendChild(bubble);
-    chatMessages.appendChild(messageDiv);
-
-    scrollToBottom();
+// Fonction utilitaire pour afficher le chargement
+function showLoading(element, message = 'Chargement...') {
+    element.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+    element.style.color = '#4299e1';
 }
 
-
-// ── FONCTION : Scroll automatique vers le bas ───────────────────
-function scrollToBottom() {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+function hideLoading(element) {
+    element.style.color = '';
 }
 
+// Chat simple
+document.getElementById('chat-btn').addEventListener('click', async () => {
+    const message = document.getElementById('chat-input').value.trim();
+    if (!message) return;
 
-// ── FONCTION : Gérer l'état de chargement ──────────────────────
-function setLoading(isLoading) {
-    if (isLoading) {
-        loader.style.display = 'flex';  // Affiche les 3 points
-        sendBtn.disabled     = true;    // Désactive le bouton
-        userInput.disabled   = true;    // Désactive le champ
-    } else {
-        loader.style.display = 'none';  // Cache le loader
-        sendBtn.disabled     = false;   // Réactive le bouton
-        userInput.disabled   = false;   // Réactive le champ
-        userInput.focus();              // Remet le curseur
-    }
-}
+    const responseDiv = document.getElementById('chat-response');
+    showLoading(responseDiv, 'Envoi en cours...');
 
-
-// ── FONCTION PRINCIPALE : Envoyer le message ───────────────────
-async function sendMessage() {
-
-    const userText = userInput.value.trim();
-
-    // Ne fait rien si le champ est vide
-    if (!userText) return;
-
-    // 1. Affiche le message utilisateur
-    appendMessage(userText, 'user');
-
-    // 2. Vide le champ
-    userInput.value = '';
-    userInput.style.height = 'auto';
-
-    // 3. Active le loader
-    setLoading(true);
-
-    // 4. Appel au backend
     try {
-        const response = await fetch(API_URL, {
-            method: 'POST',                           // On envoie → POST
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
             headers: {
-                'Content-Type': 'application/json',   // Données au format JSON
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message: userText }) // Objet JS → texte JSON
+            body: JSON.stringify({ message }),
         });
 
-        if (!response.ok) {
-            // Le serveur a répondu avec une erreur (4xx ou 5xx)
-            const errorData = await response.json();
-            throw new Error(errorData.detail || `Erreur serveur: ${response.status}`);
-        }
-
-        // Parse la réponse JSON → objet JavaScript { reply: "..." }
         const data = await response.json();
-
-        // 5. Affiche la réponse du bot
-        appendMessage(data.reply, 'bot');
-
+        hideLoading(responseDiv);
+        responseDiv.textContent = data.reply || JSON.stringify(data, null, 2);
     } catch (error) {
-        console.error('Erreur:', error);
-        appendMessage(
-            `❌ Erreur : ${error.message}. Vérifiez que le backend est démarré.`,
-            'bot'
-        );
-    } finally {
-        // S'exécute TOUJOURS (succès ou erreur) → désactive le loader
-        setLoading(false);
-    }
-}
-
-
-// ── ÉVÉNEMENTS ─────────────────────────────────────────────────
-
-// Clic sur le bouton Envoyer
-sendBtn.addEventListener('click', sendMessage);
-
-// Touche Entrée (sans Shift) → envoie
-// Shift + Entrée → nouvelle ligne
-userInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
+        hideLoading(responseDiv);
+        responseDiv.textContent = `Erreur: ${error.message}`;
+        responseDiv.style.color = '#e53e3e';
     }
 });
 
-// Auto-resize du textarea selon le contenu
-userInput.addEventListener('input', () => {
-    userInput.style.height = 'auto';
-    userInput.style.height = userInput.scrollHeight + 'px';
+// Analyse par agent
+document.getElementById('agent-btn').addEventListener('click', async () => {
+    const text = document.getElementById('agent-input').value.trim();
+    const task = document.getElementById('agent-task').value.trim() || 'Analyse complète de ce texte';
+
+    if (!text) return;
+
+    const responseDiv = document.getElementById('agent-response');
+    showLoading(responseDiv, 'Analyse en cours...');
+
+    try {
+        const response = await fetch(`${API_BASE}/agent/analyze`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text, task }),
+        });
+
+        const data = await response.json();
+        hideLoading(responseDiv);
+
+        let output = `📋 Tâche: ${data.task}\n\n🗂️ Plan:\n`;
+        data.plan.forEach((step, index) => {
+            output += `${index + 1}. ${step}\n`;
+        });
+
+        output += `\n⚙️ Étapes exécutées:\n`;
+        data.steps.forEach(step => {
+            output += `Étape ${step.step_number}: ${step.step_name}\n`;
+            output += `🔧 Outil: ${step.tool_used}\n`;
+            output += `📄 Résultat: ${step.result}\n`;
+            output += `👁️ Observation: ${step.observation}\n\n`;
+        });
+
+        output += `🎯 Réponse finale: ${data.final_answer}\n`;
+        output += `📊 Total étapes: ${data.total_steps}`;
+
+        responseDiv.textContent = output;
+    } catch (error) {
+        hideLoading(responseDiv);
+        responseDiv.textContent = `Erreur: ${error.message}`;
+        responseDiv.style.color = '#e53e3e';
+    }
+});
+
+// Vérifier status
+document.getElementById('status-btn').addEventListener('click', async () => {
+    const responseDiv = document.getElementById('status-response');
+    showLoading(responseDiv, 'Vérification...');
+
+    try {
+        const response = await fetch(`${API_BASE}/`);
+        const data = await response.json();
+        hideLoading(responseDiv);
+        responseDiv.textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+        hideLoading(responseDiv);
+        responseDiv.textContent = `Erreur: ${error.message}`;
+        responseDiv.style.color = '#e53e3e';
+    }
 });

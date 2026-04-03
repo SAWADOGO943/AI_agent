@@ -1,173 +1,92 @@
-from agents.base_agent import BaseAgent
-from schemas.agent_schema import AgentResponse, AgentStep
 from typing import List
+from schemas.agent_schema import AgentStep, AgentResponse
+from services.gemini_service import call_gemini
 
 
-class TextAnalysisAgent(BaseAgent):
-    """
-    Agent d'analyse de texte.
-    Planifie, exécute et observe son propre travail.
-    Son raisonnement complet est visible dans la réponse.
-    """
+class TextAnalysisAgent:
+    """Agent d'analyse de texte qui planifie, exécute et observe son travail."""
 
     def __init__(self):
-        super().__init__()  # Initialise Gemini via BaseAgent
-
-        # Dictionnaire des outils disponibles
-        # Clé = nom de l'outil, Valeur = la fonction à appeler
         self.tools = {
-            "analyser_sentiment": self.analyser_sentiment,
-            "extraire_themes": self.extraire_themes,
-            "evaluer_complexite": self.evaluer_complexite,
+            "analyser_sentiment": self._analyser_sentiment,
+            "extraire_themes": self._extraire_themes,
+            "evaluer_complexite": self._evaluer_complexite,
         }
 
-    def planifier(self, texte: str, task: str) -> List[str]:
-        """
-        Phase PLANIFICATION — L'agent décide lui-même quelles étapes effectuer.
-        C'est ici que l'agent "réfléchit" avant d'agir.
-        Il reçoit la liste des outils disponibles et choisit lesquels utiliser.
-        """
-        prompt = f"""Tu es un agent IA qui doit planifier une analyse de texte.
-Ta tâche : {task}
+    async def run(
+        self, text: str, task: str = "Analyse complète de ce texte"
+    ) -> AgentResponse:
+        """Exécute l'agent sur le texte donné."""
+        # Planification
+        plan = [
+            "Analyser le sentiment du texte",
+            "Extraire les thèmes principaux",
+            "Évaluer la complexité du texte",
+            "Synthétiser les résultats",
+        ]
 
-Les outils disponibles :
-- analyser_sentiment : analyse si le texte est positif, négatif ou neutre
-- extraire_themes : identifie les thèmes principaux du texte
-- evaluer_complexite : évalue le niveau de complexité du texte
+        steps: List[AgentStep] = []
+        step_number = 1
 
-En lisant ce texte, décide quels outils utiliser et dans quel ordre.
-Réponds UNIQUEMENT avec une liste numérotée, une étape par ligne.
-Format exact attendu :
-1. [nom_outil] : [raison en une phrase]
-2. [nom_outil] : [raison en une phrase]
-3. [nom_outil] : [raison en une phrase]
-
-Texte à analyser (aperçu) :
-{texte[:500]}"""
-
-        response = self.model.generate_content(prompt)
-        plan_text = response.text.strip()
-
-        # Parse la réponse pour extraire les étapes numérotées
-        steps = []
-        for line in plan_text.split("\\n"):
-            line = line.strip()
-            if line and line[0].isdigit():
-                steps.append(line)
-
-        # Sécurité : si le parsing échoue, on utilise un plan par défaut
-        if not steps:
-            steps = [
-                "1. analyser_sentiment : comprendre le ton général du texte",
-                "2. extraire_themes : identifier les sujets principaux abordés",
-                "3. evaluer_complexite : évaluer le niveau requis pour lire ce texte",
-            ]
-
-        return steps
-
-    def _identifier_outil(self, etape: str) -> str:
-        """
-        Identifie quel outil utiliser en lisant le nom dans l'étape du plan.
-        Cherche le nom de l'outil dans le texte de l'étape.
-        """
-        etape_lower = etape.lower()
-        for tool_name in self.tools.keys():
-            if tool_name in etape_lower:
-                return tool_name
-
-        # Fallback : prend le premier outil si aucun n'est trouvé
-        return list(self.tools.keys())[0]
-
-    def observer(self, etape_nom: str, resultat: str) -> str:
-        """
-        Phase OBSERVATION — L'agent lit son propre résultat.
-        Il formule ce qu'il a appris en une ou deux phrases.
-        Cette étape simule la réflexion de l'agent sur ses propres actions.
-        """
-        prompt = f"""Tu es un agent IA qui vient d'exécuter une étape de son analyse.
-Observe le résultat et formule en 1 ou 2 phrases ce que tu retiens.
-Commence obligatoirement par "J'observe que..."
-Sois concis et factuel.
-
-Etape exécutée : {etape_nom}
-Résultat obtenu :
-{resultat}"""
-
-        response = self.model.generate_content(prompt)
-        return response.text.strip()
-
-    async def run(self, texte: str, task: str) -> AgentResponse:
-        """
-        Boucle principale de l'agent.
-        Planifier -> Executer chaque étape -> Observer -> Synthétiser.
-        """
-
-        print(f"\\n{'=' * 50}")
-        print(f"AGENT DÉMARRÉ")
-        print(f"Tâche : {task}")
-        print(f"{'=' * 50}\\n")
-
-        # ── PHASE 1 : PLANIFICATION ──────────────────────────────────
-        print("Phase 1 — Planification en cours...")
-        plan = self.planifier(texte, task)
-        print(f"Plan établi : {len(plan)} étapes")
-        for etape in plan:
-            print(f"  {etape}")
-
-        # ── PHASE 2 : EXÉCUTION ET OBSERVATION ──────────────────────
-        steps_executed = []
-        resultats_pour_synthese = []
-
-        for i, etape in enumerate(plan, start=1):
-            print(f"\\nPhase 2.{i} — Exécution : {etape}")
-
-            # Identifier l'outil à utiliser
-            tool_name = self._identifier_outil(etape)
-            tool_function = self.tools[tool_name]
-
-            # Extraire le nom lisible de l'étape
-            step_name = etape.split(":")[1].strip() if ":" in etape else etape
-
-            # Exécuter l'outil
-            print(f"  Outil utilisé : {tool_name}")
-            result = tool_function(texte)
-            print(f"  Résultat obtenu ({len(result)} caractères)")
-
-            # Observer le résultat
-            observation = self.observer(tool_name, result)
-            print(f"  Observation : {observation[:100]}...")
-
-            # Stocker l'étape complète
-            steps_executed.append(
-                AgentStep(
-                    step_number=i,
-                    step_name=step_name,
-                    tool_used=tool_name,
-                    result=result,
-                    observation=observation,
+        # Exécution des étapes
+        for tool_name, tool_func in self.tools.items():
+            try:
+                result = await tool_func(text)
+                observation = (
+                    f"Résultat de {tool_name}: {result[:200]}..."  # Limiter la longueur
                 )
-            )
+                steps.append(
+                    AgentStep(
+                        step_number=step_number,
+                        step_name=tool_name.replace("_", " ").capitalize(),
+                        tool_used=tool_name,
+                        result=result,
+                        observation=observation,
+                    )
+                )
+                step_number += 1
+            except Exception as e:
+                steps.append(
+                    AgentStep(
+                        step_number=step_number,
+                        step_name=f"Erreur dans {tool_name}",
+                        tool_used=tool_name,
+                        result="",
+                        observation=f"Erreur: {str(e)}",
+                    )
+                )
+                step_number += 1
 
-            resultats_pour_synthese.append(
-                {
-                    "nom": tool_name,
-                    "resultat": result,
-                }
-            )
-
-        # ── PHASE 3 : SYNTHÈSE FINALE ────────────────────────────────
-        print(f"\\nPhase 3 — Synthèse finale en cours...")
-        final_answer = self.synthetiser(texte, resultats_pour_synthese)
-        print("Synthèse générée.")
-
-        print(f"\\n{'=' * 50}")
-        print("AGENT TERMINÉ")
-        print(f"{'=' * 50}\\n")
+        # Synthèse finale
+        final_answer = await self._synthetiser_resultats(steps, task)
 
         return AgentResponse(
             task=task,
             plan=plan,
-            steps=steps_executed,
+            steps=steps,
             final_answer=final_answer,
-            total_steps=len(steps_executed),
+            total_steps=len(steps),
         )
+
+    async def _analyser_sentiment(self, text: str) -> str:
+        """Analyse le sentiment du texte."""
+        prompt = f"Analyse le sentiment de ce texte (positif, négatif, neutre) et explique brièvement: {text[:1000]}"
+        return await call_gemini(prompt)
+
+    async def _extraire_themes(self, text: str) -> str:
+        """Extrait les thèmes principaux."""
+        prompt = f"Extrait les thèmes principaux de ce texte sous forme de liste: {text[:1000]}"
+        return await call_gemini(prompt)
+
+    async def _evaluer_complexite(self, text: str) -> str:
+        """Évalue la complexité du texte."""
+        prompt = f"Évalue la complexité linguistique de ce texte (simple, moyenne, complexe) et justifie: {text[:1000]}"
+        return await call_gemini(prompt)
+
+    async def _synthetiser_resultats(self, steps: List[AgentStep], task: str) -> str:
+        """Synthétise les résultats des étapes."""
+        results_summary = "\n".join(
+            [f"- {step.step_name}: {step.observation}" for step in steps]
+        )
+        prompt = f"Basé sur ces analyses:\n{results_summary}\n\nSynthétise une réponse complète pour la tâche: {task}"
+        return await call_gemini(prompt)
